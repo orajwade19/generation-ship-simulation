@@ -6,6 +6,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
+
 # Constants
 DISTANCE_TO_PROXIMA_CENTAURI = 4.24 * 9.461e12  # In kilometers (4.24 light-years)
 SPEED_OF_LIGHT_KM_PER_YEAR = 299792 * 60 * 60 * 24 * 365 / 1e9  # Billion km/year
