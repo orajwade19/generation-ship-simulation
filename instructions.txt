@@ -1,0 +1,12 @@
+1. clone the repo
+2. Install python and npm if required
+
+Terminal 1
+1. cd generation-ship-simulation
+2. python simulation.py -> will start flask app on http://localhost:5001/
+
+Terminal 2
+1. cd generation-ship-simulation/frontend
+2. npm install (only first time)
+3. npm start -> http://localhost:3000/
+
