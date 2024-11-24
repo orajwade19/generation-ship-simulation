@@ -21,6 +21,8 @@ const Simulation = () => {
     const DISTANCE_TO_PROXIMA_CENTAURI = 4.24 * 9.461e12;
     const [formData, setFormData] = useState(inputs);
     const [simulationData, setSimulationData] = useState([]);
+    const [simulationLogs, setSimulationLogs] = useState([]);
+
 
     const handleChange = (e, key) => {
         const updatedData = { ...formData };
@@ -55,6 +57,9 @@ const Simulation = () => {
             .then((response) => response.json())
             .then((data) => {
                 setSimulationData(data);
+                const latestYearLogs = data[data.length - 1].log || [];
+                setSimulationLogs(latestYearLogs);
+                console.log('Simulation data:', data);
             })
             .catch((error) => console.error('Simulation error:', error));
     };
@@ -210,6 +215,7 @@ const Simulation = () => {
                         </button>
                     </form>
                 </div>
+                
 
                 <div>
                     <div style={{margin:5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
@@ -226,6 +232,25 @@ const Simulation = () => {
                             (formData['lightspeed_fraction']['value'] * 299792 * 24 * 365)).toFixed(2)}{' '}
                             yrs</h4>
                     </div>
+                    <div style={{
+    margin: 5,
+    padding: 15,
+    backgroundColor: '#1e1e1e',
+    borderRadius: 10,
+    maxHeight: '200px',
+    overflowY: 'auto'
+}}>
+    <h5 style={{color: '#B0B0B0', margin: 5}}>Simulation Logs:</h5>
+    {simulationLogs.map((log, index) => (
+        <div key={index} style={{
+            color: '#FFFFFF',
+            padding: '5px',
+            borderBottom: '1px solid #333'
+        }}>
+            {log}
+        </div>
+    ))}
+</div>
                 </div>
 
                 <div style={{width: '52vw', marginLeft: 10, color: '#E0E0E0'}}>
