@@ -2,6 +2,7 @@ import numpy as np
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from scipy.stats import skewnorm
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -49,7 +50,8 @@ class GenerationShip:
 
         # Update resources
         resource_consumption = self.population * np.random.normal(NORMAL_CONSUMPTION, 10)  # Per person
-        resource_production = max(0, np.random.normal(self.resource_gen_rate, self.resource_gen_rate * 0.1))
+        skewness = -1  # Negative for left-tailed skew
+        resource_production = max(0, skewnorm.rvs(skewness, loc=self.resource_gen_rate, scale=self.resource_gen_rate * 0.1))
         self.resources += resource_production - resource_consumption
 
         # Check thresholds and apply conditions
@@ -102,7 +104,7 @@ class GenerationShip:
             "speed": self.speed,
             "resource_gen_rate": self.resource_gen_rate,
             "fail": self.fail,
-            "log": self.log[-3:],  # Return the last three log entries for context
+            "log": self.log,  # Return the last three log entries for context
         }
 
 # Flask API
