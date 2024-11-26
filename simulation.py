@@ -64,18 +64,18 @@ class GenerationShip:
             self.birth_rate *= 0.9  # Decrease fertility
             self.death_rate *= 1.1  # Increase death rate due to poor conditions
             current_year_log.append(f"Year {self.year}: Rationing activated due to low resources. "
-                                    f"Birth rate: {self.birth_rate:.2f}, Death rate: {self.death_rate:.2f}.")
+                                    f" Birth rate: {self.birth_rate:.2f}, Death rate: {self.death_rate:.2f}.")
 
         # Second Threshold - Population Prioritization
         if resources_per_person < CRITICAL_CONSUMPTION_THRESHOLD:
             sudden_loss = int(0.1 * self.population)  # Lose 10% of the population
             self.population -= sudden_loss
-            current_year_log.append(f"Year {self.year}: Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
+            current_year_log.append(f" Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
 
         # Check fail condition
         if self.resources <= 0 or self.population <= 0:
             self.status = "Failed"
-            current_year_log.append(f"Year {self.year}: Mission failed! Resources or population depleted.")
+            current_year_log.append(f" Mission failed! Resources or population depleted.")
             return current_year_log
 
         # Update travel
@@ -85,7 +85,7 @@ class GenerationShip:
         if self.distance_covered >= DISTANCE_TO_PROXIMA_CENTAURI:
             self.status = "Success";
             current_year_log.append(f"Year {self.year}: Distance covered: {DISTANCE_TO_PROXIMA_CENTAURI:.2f} km.")
-            current_year_log.append(f"Year {self.year}: Successfully reached Proxima Centauri")
+            current_year_log.append(f" Successfully reached Proxima Centauri")
         else:
             current_year_log.append(f"Year {self.year}: Distance covered: {self.distance_covered:.2f} km.")
 

@@ -267,20 +267,33 @@ const Simulation = () => {
                             <div style={{margin: 5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10, width:'75%', height:'84%'}}>
                             <h5 style={{color: '#B0B0B0', margin: 5}}>Simulation Logs:</h5>
                             <div style={{overflowY: 'auto', height: '85%', marginTop:10}}>
-                                {simulationLogs.slice().reverse().map((log, index) => (
-                                    <div
-                                        key={index}
-                                        style={{
-                                            color: '#FFFFFF',
-                                            padding: '5px',
-                                            borderBottom: '1px solid #333',
-                                        }}
-                                    >
-                                        {log}
-                                    </div>
+                                {simulationData.slice().reverse().map((entry, index) => (
+                                    <>
+                                    {index === 0 ? <div
+                                            key={index}
+                                            style={{
+                                                color: '#FFFFFF',
+                                                padding: '5px',
+                                                borderBottom: '1px solid #333',
+                                            }}
+                                        >
+                                            Mission Status : {entry.status}
+                                        </div>:<></>}
+                                        <div
+                                            key={index}
+                                            style={{
+                                                color: '#FFFFFF',
+                                                padding: '5px',
+                                                borderBottom: '1px solid #333',
+                                                textWrap: 'wrap'
+                                            }}
+                                        >
+                                            {entry.log}
+                                        </div>
+                                    </>
                                 ))}
                             </div>
-                        </div>:<></>}
+                            </div> : <></>}
                     </div>
                     <div style={{width: '68vw', marginLeft: 10, color: '#E0E0E0'}}>
                         {simulationData.length > 0 && (<>
