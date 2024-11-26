@@ -9,8 +9,8 @@ CORS(app, supports_credentials=True)
 
 
 # Constants
-DISTANCE_TO_PROXIMA_CENTAURI = 4.24 * 9.461e12  # In kilometers (4.24 light-years)
-SPEED_OF_LIGHT_KM_PER_YEAR = 299792 * 60 * 60 * 24 * 365 / 1e9  # Billion km/year
+DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000 # In kilometers (4.24 light-years)
+SPEED_OF_LIGHT_KM_PER_HR = 1079251200
 NORMAL_CONSUMPTION = 90  # Average resource consumption per person
 CRITICAL_CONSUMPTION_THRESHOLD = 45  # 50% of normal consumption
 
@@ -24,12 +24,11 @@ class GenerationShip:
         self.birth_rate = data['birth_rate']
         self.death_rate = data['death_rate']
         self.resource_gen_rate = data['resource_gen_rate']
-        self.speed = data['lightspeed_fraction']
+        self.speed = data['lightspeed_fraction'] * SPEED_OF_LIGHT_KM_PER_HR
         self.total_distance = DISTANCE_TO_PROXIMA_CENTAURI
-        self.total_years = self.total_distance / (self.speed * SPEED_OF_LIGHT_KM_PER_YEAR)
+        self.total_years = (self.total_distance / (self.speed * SPEED_OF_LIGHT_KM_PER_HR))/(24*365)
         self.distance_covered = 0
-        self.fail = False
-        self.log = []
+        self.status = "Running"
 
     @staticmethod
     def validate_data(data):
@@ -40,8 +39,11 @@ class GenerationShip:
                 raise ValueError(f"Invalid or missing value for {key}")
 
     def simulate_year(self):
-        if self.fail:
-            return
+        if self.status == "Failed" or self.status == "Success":
+            return []
+
+        # Temporary log for the current year
+        current_year_log = []
 
         # Update population
         births = np.random.poisson(self.birth_rate * self.population / 1000)
@@ -61,37 +63,45 @@ class GenerationShip:
         if resources_per_person < NORMAL_CONSUMPTION:
             self.birth_rate *= 0.9  # Decrease fertility
             self.death_rate *= 1.1  # Increase death rate due to poor conditions
-            self.log.append(f"Year {self.year}: Rationing activated due to low resources. "
-                            f"Birth rate: {self.birth_rate:.2f}, Death rate: {self.death_rate:.2f}.")
+            current_year_log.append(f"Year {self.year}: Rationing activated due to low resources. "
+                                    f"Birth rate: {self.birth_rate:.2f}, Death rate: {self.death_rate:.2f}.")
 
         # Second Threshold - Population Prioritization
         if resources_per_person < CRITICAL_CONSUMPTION_THRESHOLD:
             sudden_loss = int(0.1 * self.population)  # Lose 10% of the population
             self.population -= sudden_loss
-            self.log.append(f"Year {self.year}: Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
+            current_year_log.append(f"Year {self.year}: Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
 
         # Check fail condition
         if self.resources <= 0 or self.population <= 0:
-            self.fail = True
-            self.log.append(f"Year {self.year}: Mission failed! Resources or population depleted.")
-            return
+            self.status = "Failed"
+            current_year_log.append(f"Year {self.year}: Mission failed! Resources or population depleted.")
+            return current_year_log
 
         # Update travel
-        self.distance_covered += self.speed * SPEED_OF_LIGHT_KM_PER_YEAR
-        self.log.append(f"Year {self.year}: Distance covered: {self.distance_covered:.2f} billion km.")
+        self.distance_covered += self.speed * 24 * 365  #kms travelled in 1 yr
+
+        # Check success
+        if self.distance_covered >= DISTANCE_TO_PROXIMA_CENTAURI:
+            self.status = "Success";
+            current_year_log.append(f"Year {self.year}: Distance covered: {DISTANCE_TO_PROXIMA_CENTAURI:.2f} km.")
+            current_year_log.append(f"Year {self.year}: Successfully reached Proxima Centauri")
+        else:
+            current_year_log.append(f"Year {self.year}: Distance covered: {self.distance_covered:.2f} km.")
 
         # Increment year
         self.year += 1
+
+        return current_year_log
 
     def reset(self):
         self.year = 0
         self.population = 0
         self.resources = 0
         self.distance_covered = 0
-        self.fail = False
-        self.log = []
+        self.status = ""
 
-    def get_status(self):
+    def get_status(self, logs=None):
         return {
             "year": self.year,
             "totalYears": self.total_years,
@@ -103,8 +113,8 @@ class GenerationShip:
             "death_rate": self.death_rate,
             "speed": self.speed,
             "resource_gen_rate": self.resource_gen_rate,
-            "fail": self.fail,
-            "log": self.log,  # Return the last three log entries for context
+            "status": self.status,
+            "log": logs if logs else [],  # Include only the logs for the current year
         }
 
 # Flask API
@@ -130,11 +140,11 @@ def simulate():
     results = []
 
     for _ in range(years):
-        ship.simulate_year()
-        status = ship.get_status()
+        current_logs = ship.simulate_year()
+        status = ship.get_status(logs=current_logs)
         results.append(status)
 
-        if ship.fail:
+        if ship.status == "Failed" or ship.status == "Success":
             break
 
     return jsonify(results)
