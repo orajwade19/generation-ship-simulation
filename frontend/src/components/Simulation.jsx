@@ -12,16 +12,20 @@ import {
 } from 'chart.js';
 import bg from './bagckground.jpg';
 import bg2 from './bagckground-modified.jpg';
+import shuttle from './shuttle.png'
+import proximaCentauri from './proximaCentauri.png'
 
 // Register necessary components for Chart.js
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const inputs = {
     initial_population: {label: 'Initial Population', value: 1000},
-    initial_resources: {label: 'Initial Resources', value: 1000000},
-    birth_rate: {label: 'Birth Rate (per 1000 people)', value: 9},
-    death_rate: {label: 'Death Rate (per 1000 people)', value: 7.7},
-    resource_gen_rate: {label: 'Resource Generation Rate', value: 200000},
+    ship_capacity: {label: 'Ship Capacity', value: 20000},
+    initial_resources: {label: 'Initial Resources', value: 200000},
+    birth_rate: {label: 'Birth Rate (per 1000 people)', value: 9.4},
+    death_rate: {label: 'Death Rate (per 1000 people)', value: 3.7},
+    health_index: {label: 'Health Index', value: 100},
+    resource_gen_rate: {label: 'Resource Generation Rate', value: 20000},
     lightspeed_fraction: {label: 'Speed of Ship (% of lightSpeed)', value: 0.0059},
     yearsToSimulate: {label: 'Years to Simulate', value: 100},
 };
@@ -75,9 +79,9 @@ const Simulation = () => {
 
     useEffect(() => {
         const allLogs = [];
-        if(simulationData && simulationData.length>0){
-            simulationData.map(entry=>{
-                entry.log.map(e=>allLogs.push(e))
+        if (simulationData && simulationData.length > 0) {
+            simulationData.map(entry => {
+                entry.log.map(e => allLogs.push(e))
             })
         }
         setSimulationLogs(allLogs)
@@ -95,6 +99,14 @@ const Simulation = () => {
                     backgroundColor: 'rgba(75, 192, 192, 0.4)',
                     fill: true,
                     tension: 0.1,
+                },
+                {
+                    label: 'Capacity',
+                    data: simulationData.map((yearData) => yearData.ship_capacity),
+                    borderColor: '#CA3433',
+                    backgroundColor: '#CA3433',
+                    fill: true,
+                    tension: 0.9,
                 },
             ],
         },
@@ -130,9 +142,9 @@ const Simulation = () => {
                 {
                     label: 'Status (Success=1, Running=0, Failure=-1)',
                     data: simulationData.map((yearData) => {
-                        if (yearData.status == "Running") return 0
-                        if (yearData.status == "Success") return 1
-                        if (yearData.status == "Failed") return -1
+                        if (yearData.status === "Running") return 0
+                        if (yearData.status === "Success") return 1
+                        if (yearData.status === "Failed") return -1
                     }),
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.4)',
@@ -141,7 +153,7 @@ const Simulation = () => {
                 },
             ],
         },
-        birthRate: {
+        birthRate_deathRate: {
             labels: simulationData.map((yearData) => yearData.year),
             datasets: [
                 {
@@ -152,14 +164,22 @@ const Simulation = () => {
                     fill: true,
                     tension: 0.1,
                 },
-            ],
-        },
-        deathRate: {
-            labels: simulationData.map((yearData) => yearData.year),
-            datasets: [
                 {
                     label: 'Death Rate',
                     data: simulationData.map((yearData) => yearData.death_rate),
+                    borderColor: 'rgba(255, 206, 86, 1)',
+                    backgroundColor: 'rgba(255, 206, 86, 0.4)',
+                    fill: true,
+                    tension: 0.1,
+                },
+            ],
+        },
+        healthIndex: {
+            labels: simulationData.map((yearData) => yearData.year),
+            datasets: [
+                {
+                    label: 'Health Index',
+                    data: simulationData.map((yearData) => yearData.health_index),
                     borderColor: 'rgba(255, 206, 86, 1)',
                     backgroundColor: 'rgba(255, 206, 86, 0.4)',
                     fill: true,
@@ -206,32 +226,56 @@ const Simulation = () => {
             padding: '20px',
             backgroundImage: `url(${simulationData.length > 0 ? bg2 : bg})`
         }}>
-            <div style={{display: 'flex', margin: '0 auto', height: '100%', opacity:0.90}}>
-                <div style={{ padding: 20, width: '20vw', height: '90.5vh', backgroundColor: '#1e1e1e', borderRadius: 10}}>
+            <div style={{display: 'flex', margin: '0 auto', opacity: 0.90}}>
+                <div style={{padding: 20,paddingTop:5, width: '22vw', backgroundColor: '#1e1e1e', borderRadius: 10}}>
                     <h1 style={{color: '#E0E0E0', width: '100%', textAlign: 'center'}}>Generation Ship Simulation</h1>
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} style={{textAlign: 'center'}}>
                         {Object.keys(formData).map((key) => (
-                            <div key={key} style={{height: '20%', margin: 20}}>
-                                <h5 style={{marginBottom: 5, color: '#B0B0B0'}}>{formData[key].label}:</h5>
-                                <input
-                                    type="number"
-                                    value={formData[key].value}
-                                    onChange={(e) => handleChange(e, key)}
-                                    style={{
-                                        padding: 5,
-                                        width: '95%',
-                                        borderRadius: 5,
-                                        border: '1px solid #444',
-                                        backgroundColor: '#2b2b2b',
-                                        color: '#FFFFFF',
-                                    }}
-                                />
-                            </div>
+                            <>
+                                <div key={key} style={{margin: 10, display: "flex"}}>
+                                    <h5 style={{
+                                        margin: 10,
+                                        color: '#B0B0B0',
+                                        width: '55%',
+                                        verticalAlign: 'center',
+                                        height: '100%'
+                                    }}>{formData[key].label}:</h5>
+                                    <>
+                                        <input
+                                            type="number"
+                                            value={formData[key].value}
+                                            onChange={(e) => handleChange(e, key)}
+                                            style={{
+                                                width: '30%',
+                                                borderRadius: 5,
+                                                border: '1px solid #444',
+                                                backgroundColor: '#2b2b2b',
+                                                color: '#FFFFFF',
+                                                textAlign: 'center'
+                                            }}
+                                        />
+                                    </>
+                                </div>
+                            </>
                         ))}
+                        <div style={{margin: 5, padding: 5, backgroundColor: '#1e1e1e', borderRadius: 10}}>
+                            <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Total Distance
+                                : {DISTANCE_TO_PROXIMA_CENTAURI} km
+                            </h5>
+                            <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Speed of
+                                Ship
+                                : {(formData['lightspeed_fraction']['value'] * SPEED_OF_LIGHT_KM_HR).toFixed(2)} km/hr
+                            </h5>
+                            <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Total yrs of travel
+                                : {((DISTANCE_TO_PROXIMA_CENTAURI /
+                                    (formData['lightspeed_fraction']['value'] * SPEED_OF_LIGHT_KM_HR)) / (24 * 365)).toFixed(2)}{' '}
+                                yrs
+                            </h5>
+                        </div>
                         <button
                             type="submit"
                             style={{
-                                margin: 20,
+                                margin: 10,
                                 padding: 10,
                                 cursor: 'pointer',
                                 backgroundColor: '#4CAF50',
@@ -245,93 +289,126 @@ const Simulation = () => {
                     </form>
                 </div>
 
-                <div style={{ width: '80vw'}}>
-                    <div style={{display: 'flex', width:'100%', height:300}}>
-                        <div style={{width:'25%'}}>
-                            <div style={{margin: 5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                <h5 style={{color: '#B0B0B0', margin: 5}}>Total Distance :</h5>
-                                <h4 style={{margin: 10}}>{DISTANCE_TO_PROXIMA_CENTAURI} km</h4>
-                            </div>
-                            <div style={{margin: 5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                <h5 style={{color: '#B0B0B0', margin: 5}}>Speed of Ship :</h5>
-                                <h4 style={{margin: 10}}>{(formData['lightspeed_fraction']['value'] * SPEED_OF_LIGHT_KM_HR).toFixed(2)} km/hr</h4>
-                            </div>
-                            <div style={{margin: 5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                <h5 style={{color: '#B0B0B0', margin: 5}}>Total yrs of travel :</h5>
-                                <h4 style={{margin: 10}}>{((DISTANCE_TO_PROXIMA_CENTAURI/
-                                    (formData['lightspeed_fraction']['value'] * SPEED_OF_LIGHT_KM_HR))/(24*365)).toFixed(2)}{' '}
-                                    yrs</h4>
-                            </div>
-                        </div>
-                        {simulationData.length > 0?
-                            <div style={{margin: 5, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10, width:'75%', height:'84%'}}>
-                            <h5 style={{color: '#B0B0B0', margin: 5}}>Simulation Logs:</h5>
-                            <div style={{overflowY: 'auto', height: '85%', marginTop:10}}>
-                                {simulationData.slice().reverse().map((entry, index) => (
-                                    <>
-                                    {index === 0 ? <div
-                                            key={index}
-                                            style={{
-                                                color: '#FFFFFF',
-                                                padding: '5px',
-                                                borderBottom: '1px solid #333',
-                                            }}
-                                        >
-                                            Mission Status : {entry.status}
-                                        </div>:<></>}
-                                        <div
-                                            key={index}
-                                            style={{
-                                                color: '#FFFFFF',
-                                                padding: '5px',
-                                                borderBottom: '1px solid #333',
-                                                textWrap: 'wrap'
-                                            }}
-                                        >
-                                            {entry.log}
-                                        </div>
-                                    </>
-                                ))}
-                            </div>
-                            </div> : <></>}
-                    </div>
-                    <div style={{width: '68vw', marginLeft: 10, color: '#E0E0E0'}}>
+                <div style={{width: '80vw', opacity: 0.90}}>
+                    {simulationData.length > 0 ? <div style={{
+                        position: "relative",
+                        height: 30,
+                        background: "#F2F3F2",
+                        borderRadius: "20px",
+                        overflow: "hidden",
+                        margin: 10
+                    }}>
+                        <div
+                            style={{
+                                width: `${(simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 98}%`,
+                                height: "100%",
+                                background: "linear-gradient(to right, #8c8c8c, #F2F3F2)",
+                                transition: "width 0.5s ease",
+                            }}
+                        ></div>
+
+                        <img
+                            src={shuttle}
+                            alt="Space Shuttle"
+                            style={{
+                                height: 20,
+                                position: "absolute",
+                                top: 4,
+                                left: `${(simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 98}%`,
+                                transform: "translateX(-50%)",
+                                transition: "left 0.5s ease",
+                            }}
+                        />
+                        <img
+                            src={proximaCentauri}
+                            alt="Proxima"
+                            style={{
+                                height: 30,
+                                position: "absolute",
+                                top: 0,
+                                left: `99%`,
+                                transform: "translateX(-50%)",
+                                transition: "left 0.5s ease",
+                            }}
+                        />
+
+                    </div> : <></>}
+
+                    <div style={{width: '50vw', margin: 10, color: '#E0E0E0'}}>
                         {simulationData.length > 0 && (<>
-                            {/*<h2 style={{marginTop: 10, color: '#FFFFFF', width: '100%', textAlign: 'center'}}>SIMULATION*/}
-                            {/*    RESULTS</h2>*/}
                             <div style={{
-                                width:'100%',
+                                width: '100%',
                                 display: 'grid',
                                 gridTemplateColumns: '1fr 1fr 1fr',
                                 gap: 10,
                                 borderRadius: 10
                             }}>
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                    <h5 style={{margin: 0}}>Population</h5>
+                                <h5 style={{margin: 0}}>Population</h5>
                                     <Line data={chartData.population} options={chartOptions}/>
                                 </div>
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
                                     <h5 style={{margin: 0}}>Resources</h5>
                                     <Line data={chartData.resources} options={chartOptions}/>
                                 </div>
+                                {/*<div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>*/}
+                                {/*    <h5 style={{margin: 0}}>Distance Covered</h5>*/}
+                                {/*    <Line data={chartData.distanceCovered} options={chartOptions}/>*/}
+                                {/*</div>*/}
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                    <h5 style={{margin: 0}}>Distance Covered</h5>
-                                    <Line data={chartData.distanceCovered} options={chartOptions}/>
+                                    <h5 style={{margin: 0}}>Birth Rate vs Death Rate</h5>
+                                    <Line data={chartData.birthRate_deathRate} options={chartOptions}/>
                                 </div>
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                    <h5 style={{margin: 0}}>Birth Rate</h5>
-                                    <Line data={chartData.birthRate} options={chartOptions}/>
+                                    <h5 style={{margin: 0}}>Health Index</h5>
+                                    <Line data={chartData.healthIndex} options={chartOptions}/>
                                 </div>
-                                <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                    <h5 style={{margin: 0}}>Death Rate</h5>
-                                    <Line data={chartData.deathRate} options={chartOptions}/>
-                                </div>
-                                <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                                    <h5 style={{margin: 0}}>Status (Success/Failure)</h5>
-                                    <Line data={chartData.status} options={chartOptions}/>
-                                </div>
+                                {/*<div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>*/}
+                                {/*    <h5 style={{margin: 0}}>Status (Success/Failure)</h5>*/}
+                                {/*    <Line data={chartData.status} options={chartOptions}/>*/}
+                                {/*</div>*/}
                             </div>
                         </>)}
+                    </div>
+                    <div style={{display: 'flex', height: 300}}>
+                        {simulationData.length > 0 ?
+                            <div style={{
+                                margin: 10,
+                                padding: 15,
+                                backgroundColor: '#1e1e1e',
+                                borderRadius: 10,
+                            }}>
+                                <h5 style={{color: '#B0B0B0', margin: 5}}>Simulation Logs:</h5>
+                                <div style={{overflowY: 'auto', height: '85%', marginTop: 10}}>
+                                    {simulationData.slice().reverse().map((entry, index) => (
+                                        <>
+                                            {index === 0 ? <div
+                                                key={index}
+                                                style={{
+                                                    color: '#FFFFFF',
+                                                    borderBottom: '1px solid #333',
+                                                }}
+                                            >
+                                                <h4 style={{margin: 5}}>Mission Status :
+                                                    <label style={{ borderRadius: 5, margin:5,padding: 5,backgroundColor:entry.status=='Failed'?'#CA3433':entry.status=='Running'?'rgba(54, 162, 235, 1)':'#4CAF50'}}>{entry.status}</label>
+                                                </h4>
+                                            </div> : <></>}
+                                            <h4 style={{margin: 5}}>Year : {entry.year}</h4>
+                                            <div
+                                                key={index}
+                                                style={{
+                                                    color: '#FFFFFF',
+                                                    padding: '5px',
+                                                    borderBottom: '1px solid #333',
+                                                    textWrap: 'wrap'
+                                                }}
+                                            >
+                                                {entry.log}
+                                            </div>
+                                        </>
+                                    ))}
+                                </div>
+                            </div> : <></>}
                     </div>
                 </div>
 

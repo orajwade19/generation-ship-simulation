@@ -1,5 +1,4 @@
 import numpy as np
-import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from scipy.stats import skewnorm
@@ -7,12 +6,11 @@ from scipy.stats import skewnorm
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-
 # Constants
-DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000 # In kilometers (4.24 light-years)
+DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000  # In kilometers (4.24 light-years)
 SPEED_OF_LIGHT_KM_PER_HR = 1079251200
-NORMAL_CONSUMPTION = 90  # Average resource consumption per person
-CRITICAL_CONSUMPTION_THRESHOLD = 45  # 50% of normal consumption
+NORMAL_CONSUMPTION = 100  # Average resource consumption per person
+CRITICAL_CONSUMPTION_THRESHOLD = 50  # 50% of normal consumption
 
 # Simulation class
 class GenerationShip:
@@ -21,77 +19,132 @@ class GenerationShip:
         self.year = 0
         self.population = data['initial_population']
         self.resources = data['initial_resources']
+        self.ship_capacity = data ['ship_capacity']
         self.birth_rate = data['birth_rate']
         self.death_rate = data['death_rate']
         self.resource_gen_rate = data['resource_gen_rate']
         self.speed = data['lightspeed_fraction'] * SPEED_OF_LIGHT_KM_PER_HR
         self.total_distance = DISTANCE_TO_PROXIMA_CENTAURI
-        self.total_years = (self.total_distance / (self.speed * SPEED_OF_LIGHT_KM_PER_HR))/(24*365)
+        self.total_years = (self.total_distance / (self.speed * 24 * 365))  # Travel years
         self.distance_covered = 0
+        self.health_index = data['health_index']  # Initialize health index
         self.status = "Running"
 
     @staticmethod
     def validate_data(data):
-        required_keys = ['initial_population', 'initial_resources', 'birth_rate', 'death_rate',
+        required_keys = ['initial_population', 'ship_capacity', 'initial_resources', 'birth_rate', 'death_rate',
                          'resource_gen_rate', 'lightspeed_fraction']
         for key in required_keys:
             if key not in data or data[key] <= 0:
                 raise ValueError(f"Invalid or missing value for {key}")
 
     def simulate_year(self):
-        if self.status == "Failed" or self.status == "Success":
+        if self.status in ["Failed", "Success"]:
             return []
 
-        # Temporary log for the current year
         current_year_log = []
 
-        # Update population
-        births = np.random.poisson(self.birth_rate * self.population / 1000)
-        deaths = np.random.poisson(self.death_rate * self.population / 1000)
+        # Calculate Health Index
+        self.health_index = max(0, min(100, self.health_index))  # Clamp health between 0 and 100
+
+        # Check for overpopulation
+        if self.population > 0.8 * self.ship_capacity:
+            overcrowding_penalty = (self.population / self.ship_capacity - 0.8) * 10  # Penalty based on excess
+            self.health_index *= 0.95  # Reduce health index due to overcrowding
+            self.resource_gen_rate *= 0.9  # Decrease resource production efficiency
+            current_year_log.append(f"Overcrowding detected! Health index reduced by 5%. Production efficiency reduced.")
+
+        # Random disease outbreaks
+        if np.random.random() < 0.05:  # 5% chance of disease outbreak
+            disease_penalty = np.random.randint(1, 5) / 10
+            self.health_index -= disease_penalty
+            current_year_log.append(f"Disease outbreak! Health index dropped by {disease_penalty}.")
+
+        # Adjust birth and death rates based on health index
+        health_factor = self.health_index / 100
+        self.birth_rate = max(0, self.birth_rate * health_factor)  # Ensure non-negative birth rate
+        self.death_rate = max(0, self.death_rate * (2 - health_factor))  # Ensure non-negative death rate
+
+        current_year_log.append(f"Birth Rate: {self.birth_rate:.2f}. Death Rate: {self.death_rate:.2f}")
+
+        # Calculate births and deaths
+        if self.population > 0:
+            births = np.random.poisson(self.birth_rate * self.population / 1000)
+            deaths = np.random.poisson(self.death_rate * self.population / 1000)
+        else:
+            births = 0
+            deaths = 0
+
         self.population += births - deaths
 
-        # Update resources
-        resource_consumption = self.population * np.random.normal(NORMAL_CONSUMPTION, 10)  # Per person
-        skewness = -1  # Negative for left-tailed skew
-        resource_production = max(0, skewnorm.rvs(skewness, loc=self.resource_gen_rate, scale=self.resource_gen_rate * 0.1))
-        self.resources += resource_production - resource_consumption
+        # Prevent population exceeding ship capacity
+        if self.population > self.ship_capacity:
+            excess_population = self.population - self.ship_capacity
+            self.population = self.ship_capacity
+            current_year_log.append(f"Population exceeded ship capacity! {excess_population} people lost.")
 
-        # Check thresholds and apply conditions
+        # Log population changes
+        current_year_log.append(f"Births: {births}, Deaths: {deaths}, Population: {self.population}.")
+
+        # Calculate Base Resource Production
         resources_per_person = self.resources / self.population if self.population > 0 else 0
 
-        # First Threshold - Rationing
-        if resources_per_person < NORMAL_CONSUMPTION:
-            self.birth_rate *= 0.9  # Decrease fertility
-            self.death_rate *= 1.1  # Increase death rate due to poor conditions
-            current_year_log.append(f"Year {self.year}: Rationing activated due to low resources. "
-                                    f" Birth rate: {self.birth_rate:.2f}, Death rate: {self.death_rate:.2f}.")
+        # Resource Production
+        if self.population > 0:
+            base_production_rate = self.population * self.resource_gen_rate / 100  # Scale by population
+            skewness = -1  # Left-tailed skew for realistic variability
+            resource_production = max(0, skewnorm.rvs(skewness, loc=base_production_rate * health_factor,
+                                                      scale=base_production_rate * 0.1))
+        else:
+            resource_production = 0
 
-        # Second Threshold - Population Prioritization
+        # Resource Consumption
         if resources_per_person < CRITICAL_CONSUMPTION_THRESHOLD:
+            # Critical resource shortage
             sudden_loss = int(0.1 * self.population)  # Lose 10% of the population
             self.population -= sudden_loss
-            current_year_log.append(f" Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
+            resource_consumption = self.population * np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10)  # Reduced consumption
+            resource_consumption = max(0, min(resource_consumption, self.resources))
+            current_year_log.append(f"Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
+            self.resource_gen_rate *= 0.5  # Reduced productivity
+        elif resources_per_person < NORMAL_CONSUMPTION:
+            # Low resources, rationing
+            self.health_index *= 0.9  # Penalty for insufficient resources
+            resource_consumption = self.population * np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10)  # Rationed consumption
+            resource_consumption = max(0, min(resource_consumption, self.resources))
+            self.resource_gen_rate *= 0.75
+            current_year_log.append("Rationing activated due to low resources.")
+        else:
+            # Normal resources
+            self.health_index *= 1.1  # Bonus for surplus resources
+            self.resource_gen_rate *= 1  # Increase productivity
+            resource_consumption = self.population * np.random.normal(NORMAL_CONSUMPTION, 10)  # Normal consumption
+            resource_consumption = max(0, min(resource_consumption, self.resources))
 
-        # Check fail condition
+        # Update Resources
+        self.resources = max(0, self.resources + resource_production - resource_consumption)
+
+        # Log resource production and consumption
+        current_year_log.append(
+            f"Resources: Produced: {resource_production:.2f}, Consumed: {resource_consumption:.2f}, Remaining: {self.resources:.2f}"
+        )
+
+        # Check for failure or success
         if self.resources <= 0 or self.population <= 0:
             self.status = "Failed"
-            current_year_log.append(f" Mission failed! Resources or population depleted.")
+            current_year_log.append("Mission failed! Resources or population depleted.")
             return current_year_log
 
-        # Update travel
-        self.distance_covered += self.speed * 24 * 365  #kms travelled in 1 yr
-
-        # Check success
+        self.distance_covered += self.speed * 24 * 365  # Distance covered in a year
         if self.distance_covered >= DISTANCE_TO_PROXIMA_CENTAURI:
-            self.status = "Success";
-            current_year_log.append(f"Year {self.year}: Distance covered: {DISTANCE_TO_PROXIMA_CENTAURI:.2f} km.")
-            current_year_log.append(f" Successfully reached Proxima Centauri")
+            self.status = "Success"
+            current_year_log.append("Successfully reached Proxima Centauri.")
         else:
-            current_year_log.append(f"Year {self.year}: Distance covered: {self.distance_covered:.2f} km.")
+            current_year_log.append(f"Distance covered: {self.distance_covered:.2f} km.")
 
-        # Increment year
-        self.year += 1
-
+        self.year += 1  # Increment year
+        # Age-related health penalty (simple decay model)
+        self.health_index *= 0.98
         return current_year_log
 
     def reset(self):
@@ -100,6 +153,7 @@ class GenerationShip:
         self.resources = 0
         self.distance_covered = 0
         self.status = ""
+        self.health_index = 100
 
     def get_status(self, logs=None):
         return {
@@ -108,13 +162,15 @@ class GenerationShip:
             "population": max(0, self.population),
             "resources": max(0, self.resources),
             "distance_covered": self.distance_covered,
+            "ship_capacity": self.ship_capacity,
             "totalDistance": self.total_distance,
             "birth_rate": self.birth_rate,
             "death_rate": self.death_rate,
+            "health_index": self.health_index,
             "speed": self.speed,
             "resource_gen_rate": self.resource_gen_rate,
             "status": self.status,
-            "log": logs if logs else [],  # Include only the logs for the current year
+            "log": logs if logs else [],
         }
 
 # Flask API
@@ -144,7 +200,7 @@ def simulate():
         status = ship.get_status(logs=current_logs)
         results.append(status)
 
-        if ship.status == "Failed" or ship.status == "Success":
+        if ship.status in ["Failed", "Success"]:
             break
 
     return jsonify(results)
