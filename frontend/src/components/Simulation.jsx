@@ -35,7 +35,6 @@ const Simulation = () => {
     const SPEED_OF_LIGHT_KM_HR = 1079251200;
     const [formData, setFormData] = useState(inputs);
     const [simulationData, setSimulationData] = useState([]);
-    const [simulationLogs, setSimulationLogs] = useState([]);
 
 
     const handleChange = (e, key) => {
@@ -76,16 +75,6 @@ const Simulation = () => {
             })
             .catch((error) => console.error('Simulation error:', error));
     };
-
-    useEffect(() => {
-        const allLogs = [];
-        if (simulationData && simulationData.length > 0) {
-            simulationData.map(entry => {
-                entry.log.map(e => allLogs.push(e))
-            })
-        }
-        setSimulationLogs(allLogs)
-    }, [simulationData]);
 
     // Prepare data for the line charts
     const chartData = {
@@ -222,13 +211,13 @@ const Simulation = () => {
         <div style={{
             backgroundColor: '#121212',
             color: '#FFFFFF',
-            minHeight: '96vh',
+            minHeight: '100vh',
             padding: '20px',
             backgroundImage: `url(${simulationData.length > 0 ? bg2 : bg})`
         }}>
-            <div style={{display: 'flex', margin: '0 auto', opacity: 0.90}}>
+            <div style={{display: 'flex', margin: '0 auto', opacity: 0.90, height:'96vh'}}>
                 <div style={{padding: 20,paddingTop:5, width: '22vw', backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                    <h1 style={{color: '#E0E0E0', width: '100%', textAlign: 'center'}}>Generation Ship Simulation</h1>
+                    <h2 style={{color: '#E0E0E0', width: '100%', textAlign: 'center'}}>Generation Ship Simulation</h2>
                     <form onSubmit={handleSubmit} style={{textAlign: 'center'}}>
                         {Object.keys(formData).map((key) => (
                             <>
@@ -259,7 +248,7 @@ const Simulation = () => {
                             </>
                         ))}
                         <div style={{margin: 5, padding: 5, backgroundColor: '#1e1e1e', borderRadius: 10}}>
-                            <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Total Distance
+                            <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Distance
                                 : {DISTANCE_TO_PROXIMA_CENTAURI} km
                             </h5>
                             <h5 style={{margin: 5, padding: 5, color: '#B0B0B0'}}>Speed of
@@ -289,15 +278,8 @@ const Simulation = () => {
                     </form>
                 </div>
 
-                <div style={{width: '80vw', opacity: 0.90}}>
-                    {simulationData.length > 0 ? <div style={{
-                        position: "relative",
-                        height: 30,
-                        background: "#F2F3F2",
-                        borderRadius: "20px",
-                        overflow: "hidden",
-                        margin: 10
-                    }}>
+                <div style={{width: '80vw', opacity: 0.90,height:'96vh'}}>
+                    {simulationData.length > 0 ? <div style={{position: "relative", height: 30, background: "#F2F3F2", borderRadius: "20px", overflow: "hidden", margin: 10}}>
                         <div
                             style={{
                                 width: `${(simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 98}%`,
@@ -306,7 +288,17 @@ const Simulation = () => {
                                 transition: "width 0.5s ease",
                             }}
                         ></div>
-
+                            {(simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 100>5?<label style={{
+                            height: 20,
+                            position: "absolute",
+                            top: 4,
+                            marginLeft: `${(simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 50}%`,
+                            marginRight: 10,
+                            transform: "translateX(-50%)",
+                            transition: "left 0.5s ease",
+                            color: '#1e1e1e',
+                                fontWeight:"bold"
+                        }}>{parseInt((simulationData.slice(-1)[0]['distance_covered'] / DISTANCE_TO_PROXIMA_CENTAURI) * 100)} %</label>:<></>}
                         <img
                             src={shuttle}
                             alt="Space Shuttle"
@@ -334,15 +326,9 @@ const Simulation = () => {
 
                     </div> : <></>}
 
-                    <div style={{width: '50vw', margin: 10, color: '#E0E0E0'}}>
+                    <div style={{margin: 10, color: '#E0E0E0', width:'92%'}}>
                         {simulationData.length > 0 && (<>
-                            <div style={{
-                                width: '100%',
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 1fr 1fr',
-                                gap: 10,
-                                borderRadius: 10
-                            }}>
+                            <div style={{width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, borderRadius: 10}}>
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
                                 <h5 style={{margin: 0}}>Population</h5>
                                     <Line data={chartData.population} options={chartOptions}/>
@@ -370,14 +356,9 @@ const Simulation = () => {
                             </div>
                         </>)}
                     </div>
-                    <div style={{display: 'flex', height: 300}}>
+                    <div style={{display: 'flex', height:'40%'}}>
                         {simulationData.length > 0 ?
-                            <div style={{
-                                margin: 10,
-                                padding: 15,
-                                backgroundColor: '#1e1e1e',
-                                borderRadius: 10,
-                            }}>
+                            <div style={{margin: 10, padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10,}}>
                                 <h5 style={{color: '#B0B0B0', margin: 5}}>Simulation Logs:</h5>
                                 <div style={{overflowY: 'auto', height: '85%', marginTop: 10}}>
                                     {simulationData.slice().reverse().map((entry, index) => (
