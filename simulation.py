@@ -1,7 +1,9 @@
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from scipy.stats import skewnorm
+import csv
+from io import StringIO
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -29,6 +31,7 @@ class GenerationShip:
         self.distance_covered = 0
         self.health_index = data['health_index']  # Initialize health index
         self.status = "Running"
+        self.simulation_history = []  # Add this to store simulation results
 
     @staticmethod
     def validate_data(data):
@@ -133,6 +136,17 @@ class GenerationShip:
         if self.resources <= 0 or self.population <= 0:
             self.status = "Failed"
             current_year_log.append("Mission failed! Resources or population depleted.")
+            self.simulation_history.append({
+                "year": self.year,
+                "population": self.population,
+                "resources": self.resources,
+                "distance_covered": self.distance_covered,
+                "health_index": self.health_index,
+                "birth_rate": self.birth_rate,
+                "death_rate": self.death_rate,
+                "resource_gen_rate": self.resource_gen_rate,
+                "status": self.status
+            })
             return current_year_log
 
         self.distance_covered += self.speed * 24 * 365  # Distance covered in a year
@@ -145,6 +159,17 @@ class GenerationShip:
         self.year += 1  # Increment year
         # Age-related health penalty (simple decay model)
         self.health_index *= 0.98
+        self.simulation_history.append({
+            "year": self.year,
+            "population": self.population,
+            "resources": self.resources,
+            "distance_covered": self.distance_covered,
+            "health_index": self.health_index,
+            "birth_rate": self.birth_rate,
+            "death_rate": self.death_rate,
+            "resource_gen_rate": self.resource_gen_rate,
+            "status": self.status
+            })
         return current_year_log
 
     def reset(self):
@@ -173,8 +198,57 @@ class GenerationShip:
             "log": logs if logs else [],
         }
 
+
+    def get_csv(self):
+        """Generate CSV data from simulation history"""
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        headers = ["Year", "Population", "Resources", "Distance Covered (km)", 
+                  "Health Index", "Birth Rate", "Death Rate", 
+                  "Resource Generation Rate", "Status"]
+        writer.writerow(headers)
+
+        # Write data rows
+        for record in self.simulation_history:
+            writer.writerow([
+                record["year"],
+                record["population"],
+                f"{record['resources']:.2f}",
+                f"{record['distance_covered']:.2f}",
+                f"{record['health_index']:.2f}",
+                f"{record['birth_rate']:.4f}",
+                f"{record['death_rate']:.4f}",
+                f"{record['resource_gen_rate']:.2f}",
+                record["status"]
+            ])
+
+        return output.getvalue()
+
+
+
 # Flask API
 ship = None
+
+@app.route('/export-csv', methods=['GET'])
+def export_csv():
+    global ship
+    if not ship:
+        return jsonify({"error": "Simulation not initialized."}), 400
+    
+    if not ship.simulation_history:
+        return jsonify({"error": "No simulation data available."}), 400
+    
+    # Generate CSV data
+    csv_data = ship.get_csv()
+    
+    # Create the response
+    response = make_response(csv_data)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=generation_ship_simulation.csv'
+    
+    return response
 
 @app.route('/initialize', methods=['POST'])
 def initialize():
