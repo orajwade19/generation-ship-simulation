@@ -36,7 +36,24 @@ const Simulation = () => {
     const [formData, setFormData] = useState(inputs);
     const [simulationData, setSimulationData] = useState([]);
 
-
+    const handleDownloadCSV = async () => {
+        try {
+            const response = await fetch('http://localhost:5001/export-csv');
+            if (!response.ok) throw new Error('Failed to download CSV');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'generation_ship_simulation.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Download error:', error);
+        }
+    };
     const handleChange = (e, key) => {
         const updatedData = {...formData};
         updatedData[key].value = e.target.value;
@@ -261,20 +278,45 @@ const Simulation = () => {
                                 yrs
                             </h5>
                         </div>
-                        <button
-                            type="submit"
-                            style={{
-                                margin: 10,
-                                padding: 10,
-                                cursor: 'pointer',
-                                backgroundColor: '#4CAF50',
-                                color: '#FFFFFF',
-                                border: 'none',
-                                borderRadius: 5,
-                            }}
-                        >
-                            Run Simulation
-                        </button>
+                        <div style={{
+    margin: 10,
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '10px'
+}}>
+    <button
+        type="submit"
+        style={{
+            padding: 10,
+            cursor: 'pointer',
+            backgroundColor: '#4CAF50',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: 5,
+        }}
+    >
+        Run Simulation
+    </button>
+    {simulationData.length > 0 && (
+        <button
+            type="button"
+            onClick={handleDownloadCSV}
+            style={{
+                padding: 10,
+                cursor: 'pointer',
+                backgroundColor: '#2196F3',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: 5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px'
+            }}
+        >
+            Download CSV
+        </button>
+    )}
+</div>
                     </form>
                 </div>
 
