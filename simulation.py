@@ -31,6 +31,10 @@ class GenerationShip:
         self.distance_covered = 0
         self.health_index = data['health_index']  # Initialize health index
         self.status = "Running"
+        self.diseaseOutbreakEvent = 0
+        self.overCrowdingEvent = 0
+        self.criticalRationingEvent = 0
+        self.normalRationingEvent = 0
         self.simulation_history = []  # Add this to store simulation results
 
     @staticmethod
@@ -42,6 +46,10 @@ class GenerationShip:
                 raise ValueError(f"Invalid or missing value for {key}")
 
     def simulate_year(self):
+        self.diseaseOutbreakEvent = 0
+        self.overCrowdingEvent = 0
+        self.criticalRationingEvent = 0
+        self.normalRationingEvent = 0
         if self.status in ["Failed", "Success"]:
             return []
 
@@ -55,12 +63,14 @@ class GenerationShip:
             overcrowding_penalty = (self.population / self.ship_capacity - 0.8) * 10  # Penalty based on excess
             self.health_index *= 0.95  # Reduce health index due to overcrowding
             self.resource_gen_rate *= 0.9  # Decrease resource production efficiency
+            self.overCrowdingEvent = 1
             current_year_log.append(f"Overcrowding detected! Health index reduced by 5%. Production efficiency reduced.")
 
         # Random disease outbreaks
         if np.random.random() < 0.05:  # 5% chance of disease outbreak
             disease_penalty = np.random.randint(1, 5) / 10
             self.health_index -= disease_penalty
+            self.diseaseOutbreakEvent = 1
             current_year_log.append(f"Disease outbreak! Health index dropped by {disease_penalty}.")
 
         # Adjust birth and death rates based on health index
@@ -84,6 +94,7 @@ class GenerationShip:
         if self.population > self.ship_capacity:
             excess_population = self.population - self.ship_capacity
             self.population = self.ship_capacity
+            self.overCrowdingEvent = 1
             current_year_log.append(f"Population exceeded ship capacity! {excess_population} people lost.")
 
         # Log population changes
@@ -110,6 +121,7 @@ class GenerationShip:
             resource_consumption = max(0, min(resource_consumption, self.resources))
             current_year_log.append(f"Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
             self.resource_gen_rate *= 0.5  # Reduced productivity
+            self.criticalRationingEvent = 1
         elif resources_per_person < NORMAL_CONSUMPTION:
             # Low resources, rationing
             self.health_index *= 0.9  # Penalty for insufficient resources
@@ -117,6 +129,7 @@ class GenerationShip:
             resource_consumption = max(0, min(resource_consumption, self.resources))
             self.resource_gen_rate *= 0.75
             current_year_log.append("Rationing activated due to low resources.")
+            self.normalRationingEvent = 1
         else:
             # Normal resources
             self.health_index *= 1.1  # Bonus for surplus resources
@@ -145,7 +158,11 @@ class GenerationShip:
                 "birth_rate": self.birth_rate,
                 "death_rate": self.death_rate,
                 "resource_gen_rate": self.resource_gen_rate,
-                "status": self.status
+                "status": self.status,
+                "diseaseOutbreakEvent": self.diseaseOutbreakEvent,
+                "overCrowdingEvent": self.overCrowdingEvent,
+                "criticalRationingEvent":self.criticalRationingEvent,
+                "normalRationingEvent": self.normalRationingEvent
             })
             return current_year_log
 
@@ -168,7 +185,11 @@ class GenerationShip:
             "birth_rate": self.birth_rate,
             "death_rate": self.death_rate,
             "resource_gen_rate": self.resource_gen_rate,
-            "status": self.status
+            "status": self.status,
+            "diseaseOutbreakEvent": self.diseaseOutbreakEvent,
+            "overCrowdingEvent": self.overCrowdingEvent,
+            "criticalRationingEvent":self.criticalRationingEvent,
+            "normalRationingEvent": self.normalRationingEvent
             })
         return current_year_log
 
@@ -179,6 +200,10 @@ class GenerationShip:
         self.distance_covered = 0
         self.status = ""
         self.health_index = 100
+        self.diseaseOutbreakEvent = 0
+        self.overCrowdingEvent = 0
+        self.criticalRationingEvent = 0
+        self.normalRationingEvent = 0
 
     def get_status(self, logs=None):
         return {
@@ -196,6 +221,10 @@ class GenerationShip:
             "resource_gen_rate": self.resource_gen_rate,
             "status": self.status,
             "log": logs if logs else [],
+            "diseaseOutbreakEvent": self.diseaseOutbreakEvent,
+            "overCrowdingEvent": self.overCrowdingEvent,
+            "criticalRationingEvent":self.criticalRationingEvent,
+            "normalRationingEvent": self.normalRationingEvent
         }
 
 
