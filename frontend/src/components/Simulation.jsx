@@ -193,6 +193,19 @@ const Simulation = () => {
                 },
             ],
         },
+        resource_gen_rate:{
+            labels: simulationData.map((yearData) => yearData.year),
+            datasets: [
+                {
+                    label: 'Resource Generation Rate',
+                    data: simulationData.map((yearData) => yearData.resource_gen_rate),
+                    borderColor: '#DAF7A6',
+                    backgroundColor: 'rgba(54, 162, 235, 0.4)',
+                    fill: true,
+                    tension: 0.1,
+                },
+            ],
+        }
     };
 
     const chartOptions = {
@@ -391,10 +404,10 @@ const Simulation = () => {
                                     <h5 style={{margin: 0}}>Health Index</h5>
                                     <Line data={chartData.healthIndex} options={chartOptions}/>
                                 </div>
-                                {/*<div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>*/}
-                                {/*    <h5 style={{margin: 0}}>Status (Success/Failure)</h5>*/}
-                                {/*    <Line data={chartData.status} options={chartOptions}/>*/}
-                                {/*</div>*/}
+                                <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
+                                    <h5 style={{margin: 0}}>Resource Generation Rate</h5>
+                                    <Line data={chartData.resource_gen_rate} options={chartOptions}/>
+                                </div>
                             </div>
                         </>)}
                     </div>
