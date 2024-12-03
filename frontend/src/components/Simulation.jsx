@@ -20,12 +20,12 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 const inputs = {
     initial_population: {label: 'Initial Population', value: 1000},
-    ship_capacity: {label: 'Ship Capacity', value: 20000},
+    ship_capacity: {label: 'Initial Ship Capacity', value: 20000},
     initial_resources: {label: 'Initial Resources', value: 200000},
-    birth_rate: {label: 'Birth Rate (per 1000 people)', value: 9.4},
-    death_rate: {label: 'Death Rate (per 1000 people)', value: 3.7},
-    health_index: {label: 'Health Index', value: 100},
-    resource_gen_rate: {label: 'Resource Generation Rate', value: 20000},
+    birth_rate: {label: 'Initial Birth Rate (per 1000 people)', value: 9.4},
+    death_rate: {label: 'Initial Death Rate (per 1000 people)', value: 3.7},
+    health_index: {label: 'Initial Health Index', value: 100},
+    resource_gen_rate: {label: 'Initial Resource Generation Rate', value: 20000},
     lightspeed_fraction: {label: 'Speed of Ship (% of lightSpeed)', value: 0.0059},
     yearsToSimulate: {label: 'Years to Simulate', value: 100},
 };
@@ -142,18 +142,38 @@ const Simulation = () => {
                 },
             ],
         },
-        status: {
+        events: {
             labels: simulationData.map((yearData) => yearData.year),
             datasets: [
                 {
-                    label: 'Status (Success=1, Running=0, Failure=-1)',
-                    data: simulationData.map((yearData) => {
-                        if (yearData.status === "Running") return 0
-                        if (yearData.status === "Success") return 1
-                        if (yearData.status === "Failed") return -1
-                    }),
+                    label: 'Overcrowding',
+                    data: simulationData.map((yearData) => yearData.overCrowdingEvent),
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 1)',
+                    fill: true,
+                    tension: 0.1,
+                },
+                {
+                    label: 'Disease Outbreak',
+                    data: simulationData.map((yearData) => yearData.diseaseOutbreakEvent),
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.4)',
+                    fill: true,
+                    tension: 0.1,
+                },
+                {
+                    label: 'Critical Resources',
+                    data: simulationData.map((yearData) => yearData.criticalRationingEvent),
+                    borderColor: 'rgba(255, 206, 86, 1)',
+                    backgroundColor: 'rgba(255, 206, 86, 1)',
+                    fill: true,
+                    tension: 0.1,
+                },
+                {
+                    label: 'Low Resorces',
+                    data: simulationData.map((yearData) => yearData.normalRationingEvent),
+                    borderColor: '#4CAF50',
+                    backgroundColor: '#4CAF50',
                     fill: true,
                     tension: 0.1,
                 },
@@ -193,6 +213,19 @@ const Simulation = () => {
                 },
             ],
         },
+        resource_gen_rate:{
+            labels: simulationData.map((yearData) => yearData.year),
+            datasets: [
+                {
+                    label: 'Resource Generation Rate',
+                    data: simulationData.map((yearData) => yearData.resource_gen_rate),
+                    borderColor: '#DAF7A6',
+                    backgroundColor: 'rgba(54, 162, 235, 0.4)',
+                    fill: true,
+                    tension: 0.1,
+                },
+            ],
+        }
     };
 
     const chartOptions = {
@@ -379,10 +412,7 @@ const Simulation = () => {
                                     <h5 style={{margin: 0}}>Resources</h5>
                                     <Line data={chartData.resources} options={chartOptions}/>
                                 </div>
-                                {/*<div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>*/}
-                                {/*    <h5 style={{margin: 0}}>Distance Covered</h5>*/}
-                                {/*    <Line data={chartData.distanceCovered} options={chartOptions}/>*/}
-                                {/*</div>*/}
+
                                 <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
                                     <h5 style={{margin: 0}}>Birth Rate vs Death Rate</h5>
                                     <Line data={chartData.birthRate_deathRate} options={chartOptions}/>
@@ -391,10 +421,15 @@ const Simulation = () => {
                                     <h5 style={{margin: 0}}>Health Index</h5>
                                     <Line data={chartData.healthIndex} options={chartOptions}/>
                                 </div>
-                                {/*<div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>*/}
-                                {/*    <h5 style={{margin: 0}}>Status (Success/Failure)</h5>*/}
-                                {/*    <Line data={chartData.status} options={chartOptions}/>*/}
-                                {/*</div>*/}
+                                <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
+                                    <h5 style={{margin: 0}}>Resource Generation Rate</h5>
+                                    <Line data={chartData.resource_gen_rate} options={chartOptions}/>
+
+                                </div>
+                                <div style={{padding: 15, backgroundColor: '#1e1e1e', borderRadius: 10}}>
+                                    <h5 style={{margin: 0}}>Events</h5>
+                                    <Line data={chartData.events} options={chartOptions}/>
+                                </div>
                             </div>
                         </>)}
                     </div>
