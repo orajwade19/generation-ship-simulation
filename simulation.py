@@ -12,7 +12,7 @@ CORS(app, supports_credentials=True)
 DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000  # In kilometers (4.24 light-years)
 SPEED_OF_LIGHT_KM_PER_HR = 1079251200
 NORMAL_CONSUMPTION = 100  # Average resource consumption per person
-CRITICAL_CONSUMPTION_THRESHOLD = 50  # 50% of normal consumption
+CRITICAL_CONSUMPTION_THRESHOLD = 90  # 50% of normal consumption
 
 # Simulation class
 class GenerationShip:
@@ -22,14 +22,14 @@ class GenerationShip:
         self.population = data['initial_population']
         self.resources = data['initial_resources']
         self.ship_capacity = data ['ship_capacity']
-        self.birth_rate = data['birth_rate']
-        self.death_rate = data['death_rate']
-        self.resource_gen_rate = data['resource_gen_rate']
+        self.initial_birth_rate = data['birth_rate']
+        self.initial_death_rate = data['death_rate']
+        self.initial_resource_gen_rate = data['resource_gen_rate']
         self.speed = data['lightspeed_fraction'] * SPEED_OF_LIGHT_KM_PER_HR
         self.total_distance = DISTANCE_TO_PROXIMA_CENTAURI
         self.total_years = (self.total_distance / (self.speed * 24 * 365))  # Travel years
         self.distance_covered = 0
-        self.health_index = data['health_index']  # Initialize health index
+        self.initial_health_index = data['health_index']  # Initialize health index
         self.status = "Running"
         self.diseaseOutbreakEvent = 0
         self.overCrowdingEvent = 0
@@ -50,6 +50,8 @@ class GenerationShip:
         self.overCrowdingEvent = 0
         self.criticalRationingEvent = 0
         self.normalRationingEvent = 0
+        self.resource_gen_rate = self.initial_resource_gen_rate
+        self.health_index = self.initial_health_index
         if self.status in ["Failed", "Success"]:
             return []
 
@@ -61,7 +63,7 @@ class GenerationShip:
         # Check for overpopulation
         if self.population > 0.8 * self.ship_capacity:
             overcrowding_penalty = (self.population / self.ship_capacity - 0.8) * 10  # Penalty based on excess
-            self.health_index *= 0.95  # Reduce health index due to overcrowding
+            self.health_index *= 0.90  # Reduce health index due to overcrowding
             self.resource_gen_rate *= 0.9  # Decrease resource production efficiency
             self.overCrowdingEvent = 1
             current_year_log.append(f"Overcrowding detected! Health index reduced by 5%. Production efficiency reduced.")
@@ -69,14 +71,14 @@ class GenerationShip:
         # Random disease outbreaks
         if np.random.random() < 0.05:  # 5% chance of disease outbreak
             disease_penalty = np.random.randint(1, 5) / 10
-            self.health_index -= disease_penalty
+            self.health_index *= (1 - disease_penalty)
             self.diseaseOutbreakEvent = 1
             current_year_log.append(f"Disease outbreak! Health index dropped by {disease_penalty}.")
 
         # Adjust birth and death rates based on health index
         health_factor = self.health_index / 100
-        self.birth_rate = max(0, self.birth_rate * health_factor)  # Ensure non-negative birth rate
-        self.death_rate = max(0, self.death_rate * (2 - health_factor))  # Ensure non-negative death rate
+        self.birth_rate = max(0, self.initial_birth_rate * health_factor)  # Ensure non-negative birth rate
+        self.death_rate = max(0, self.initial_death_rate * (2 - health_factor))  # Ensure non-negative death rate
 
         current_year_log.append(f"Birth Rate: {self.birth_rate:.2f}. Death Rate: {self.death_rate:.2f}")
 
@@ -105,7 +107,7 @@ class GenerationShip:
 
         # Resource Production
         if self.population > 0:
-            base_production_rate = self.population * self.resource_gen_rate / 100  # Scale by population
+            base_production_rate = self.population * self.resource_gen_rate # Scale by population
             skewness = -1  # Left-tailed skew for realistic variability
             resource_production = max(0, skewnorm.rvs(skewness, loc=base_production_rate * health_factor,
                                                       scale=base_production_rate * 0.1))
@@ -115,9 +117,9 @@ class GenerationShip:
         # Resource Consumption
         if resources_per_person < CRITICAL_CONSUMPTION_THRESHOLD:
             # Critical resource shortage
-            sudden_loss = int(0.1 * self.population)  # Lose 10% of the population
+            sudden_loss = max(1, int(0.1 * self.population))  # Lose 10% of the population
             self.population -= sudden_loss
-            resource_consumption = self.population * np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10)  # Reduced consumption
+            resource_consumption = np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10, size=self.population).sum()  # Reduced consumption
             resource_consumption = max(0, min(resource_consumption, self.resources))
             current_year_log.append(f"Critical resource shortage. Population reduced by prioritization ({sudden_loss} lost).")
             self.resource_gen_rate *= 0.5  # Reduced productivity
@@ -125,16 +127,16 @@ class GenerationShip:
         elif resources_per_person < NORMAL_CONSUMPTION:
             # Low resources, rationing
             self.health_index *= 0.9  # Penalty for insufficient resources
-            resource_consumption = self.population * np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10)  # Rationed consumption
+            resource_consumption = np.random.normal(CRITICAL_CONSUMPTION_THRESHOLD, 10, size=self.population).sum()  # Rationed consumption
             resource_consumption = max(0, min(resource_consumption, self.resources))
-            self.resource_gen_rate *= 0.75
+            self.resource_gen_rate *= 0.9
             current_year_log.append("Rationing activated due to low resources.")
             self.normalRationingEvent = 1
         else:
             # Normal resources
             self.health_index *= 1.1  # Bonus for surplus resources
             self.resource_gen_rate *= 1  # Increase productivity
-            resource_consumption = self.population * np.random.normal(NORMAL_CONSUMPTION, 10)  # Normal consumption
+            resource_consumption = np.random.normal(NORMAL_CONSUMPTION, 10, size=self.population).sum()  # Normal consumption
             resource_consumption = max(0, min(resource_consumption, self.resources))
 
         # Update Resources
