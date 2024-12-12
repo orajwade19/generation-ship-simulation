@@ -21,11 +21,11 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const inputs = {
     initial_population: {label: 'Initial Population', value: 1000},
     ship_capacity: {label: 'Initial Ship Capacity', value: 20000},
-    initial_resources: {label: 'Initial Resources', value: 200000},
+    initial_resources: {label: 'Initial Resources', value: 120000},
     birth_rate: {label: 'Initial Birth Rate (per 1000 people)', value: 9.4},
     death_rate: {label: 'Initial Death Rate (per 1000 people)', value: 3.7},
     health_index: {label: 'Initial Health Index', value: 100},
-    resource_gen_rate: {label: 'Initial Resource Generation Rate', value: 20000},
+    resource_gen_rate: {label: 'Initial Resource Generation Rate', value: 120},
     lightspeed_fraction: {label: 'Speed of Ship (% of lightSpeed)', value: 0.0059},
     yearsToSimulate: {label: 'Years to Simulate', value: 100},
 };
