@@ -99,6 +99,30 @@ class GenerationShip:
             self.overCrowdingEvent = 1
             current_year_log.append(f"Population exceeded ship capacity! {excess_population} people lost.")
 
+        self.population = max(0, self.population)
+
+        if self.population <= 0:
+            resource_consumption = 0
+            self.status = "Failed"
+            current_year_log.append("Mission failed! Population reached zero.")
+            self.simulation_history.append({
+                "year": self.year,
+                "population": 0,
+                "resources": self.resources,
+                "distance_covered": self.distance_covered,
+                "health_index": self.health_index,
+                "birth_rate": self.birth_rate,
+                "death_rate": self.death_rate,
+                "resource_gen_rate": self.resource_gen_rate,
+                "status": self.status,
+                "diseaseOutbreakEvent": self.diseaseOutbreakEvent,
+                "overCrowdingEvent": self.overCrowdingEvent,
+                "criticalRationingEvent": self.criticalRationingEvent,
+                "normalRationingEvent": self.normalRationingEvent
+            })
+            return current_year_log
+
+
         # Log population changes
         current_year_log.append(f"Births: {births}, Deaths: {deaths}, Population: {self.population}.")
 
