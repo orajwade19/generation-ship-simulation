@@ -7,10 +7,7 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
-import concurrent.futures
-import time
-from scipy import stats
-from itertools import product
+
 
 @dataclass
 class SimulationRun:
@@ -31,8 +28,7 @@ class SimulationRun:
 class EnhancedGenerationShipClient:
     def __init__(self, base_url: str = 'http://localhost:5001'):
         self.base_url = base_url.rstrip('/')
-        self.simulation_runs = []
-        self.current_simulation_id = None
+        self.simulation_runs: List[SimulationRun] = []
         
     def run_multiple_simulations(self, config: Dict, num_runs: int = 10, max_years: int = 1000) -> None:
         """
@@ -206,36 +202,17 @@ class EnhancedGenerationShipClient:
 
         response = requests.post(f"{self.base_url}/initialize", json=config)
         response.raise_for_status()
-        result = response.json()
-        self.current_simulation_id = result['simulation_id']
-        return result
+        return response.json()
 
     def simulate(self, years: int = 1) -> List[Dict]:
-        if not self.current_simulation_id:
-            raise ValueError("No active simulation. Call initialize() first.")
-            
-        response = requests.post(
-            f"{self.base_url}/simulate/{self.current_simulation_id}", 
-            json={'years': years}
-        )
+        response = requests.post(f"{self.base_url}/simulate", json={'years': years})
         response.raise_for_status()
         return response.json()
 
     def reset(self) -> Dict:
-        if not self.current_simulation_id:
-            raise ValueError("No active simulation. Call initialize() first.")
-            
-        response = requests.post(f"{self.base_url}/reset/{self.current_simulation_id}")
+        response = requests.post(f"{self.base_url}/reset")
         response.raise_for_status()
         return response.json()
-
-    def export_csv(self) -> str:
-        if not self.current_simulation_id:
-            raise ValueError("No active simulation. Call initialize() first.")
-            
-        response = requests.get(f"{self.base_url}/export-csv/{self.current_simulation_id}")
-        response.raise_for_status()
-        return response.content.decode('utf-8')
 
 # Generation Ship Configurations Tuned to Server Mechanics
 
@@ -528,281 +505,47 @@ class ShipWeightOptimizer:
             'years_survived_mean': stability['years_survived']['mean']
         }
 
-class ParallelGenerationShipClient:
-    def __init__(self, base_url: str = 'http://localhost:5001', max_workers: int = 4):
-        self.base_url = base_url.rstrip('/')
-        self.max_workers = max_workers
-        self.session = requests.Session()
-        self.simulation_runs = []
-
-    def _run_single_simulation(self, run_id: int, config: Dict, max_years: int = 1000) -> SimulationRun:
-        """Run a single simulation with error handling and retries"""
-        max_retries = 3
-        retry_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                # Initialize simulation
-                response = self.session.post(f"{self.base_url}/initialize", json=config)
-                response.raise_for_status()
-                simulation_id = response.json()['simulation_id']
-
-                # Run simulation for all years at once
-                response = self.session.post(
-                    f"{self.base_url}/simulate/{simulation_id}", 
-                    json={'years': max_years}
-                )
-                response.raise_for_status()
-                results = response.json()
-                
-                if not results:
-                    raise Exception("Simulation failed with no results")
-                    
-                # Get final year results
-                last_year = results[-1]
-                
-                # Count total events across all years
-                disease_outbreaks = sum(year.get('diseaseOutbreakEvent', 0) for year in results)
-                overcrowding_events = sum(year.get('overCrowdingEvent', 0) for year in results)
-                critical_rationing_events = sum(year.get('criticalRationingEvent', 0) for year in results)
-                normal_rationing_events = sum(year.get('normalRationingEvent', 0) for year in results)
-                
-                return SimulationRun(
-                    run_id=run_id,
-                    config=config.copy(),
-                    final_status=last_year['status'],
-                    years_survived=len(results),
-                    final_population=last_year['population'],
-                    final_resources=last_year['resources'],
-                    final_health=last_year['health_index'],
-                    distance_covered=last_year['distance_covered'],
-                    disease_outbreaks=disease_outbreaks,
-                    overcrowding_events=overcrowding_events,
-                    critical_rationing_events=critical_rationing_events,
-                    normal_rationing_events=normal_rationing_events
-                )
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == max_retries - 1:
-                    print(f"Failed to complete simulation {run_id} after {max_retries} attempts: {str(e)}")
-                    raise
-                time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
-                continue
-
-    def run_parallel_simulations(self, config: Dict, num_runs: int = 10, max_years: int = 1000) -> List[SimulationRun]:
-        """Run multiple simulations in parallel"""
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all simulation runs
-            future_to_run = {
-                executor.submit(self._run_single_simulation, i, config, max_years): i 
-                for i in range(num_runs)
-            }
-            
-            # Process results as they complete
-            completed_runs = []
-            for future in concurrent.futures.as_completed(future_to_run):
-                run_id = future_to_run[future]
-                try:
-                    result = future.result()
-                    completed_runs.append(result)
-                    print(f"Completed simulation run {run_id + 1}/{num_runs}")
-                except Exception as e:
-                    print(f"Simulation run {run_id} generated an exception: {str(e)}")
-            
-            self.simulation_runs = completed_runs
-            return completed_runs
-
-    def analyze_results(self) -> pd.DataFrame:
-        """Analyze simulation results and return a DataFrame"""
-        if not self.simulation_runs:
-            raise ValueError("No simulation runs to analyze")
-            
-        runs_data = []
-        for run in self.simulation_runs:
-            run_dict = {
-                'Run ID': run.run_id,
-                'Final Status': run.final_status,
-                'Years Survived': run.years_survived,
-                'Final Population': run.final_population,
-                'Final Resources': run.final_resources,
-                'Final Health': run.final_health,
-                'Distance Covered (km)': run.distance_covered,
-                'Disease Outbreaks': run.disease_outbreaks,
-                'Overcrowding Events': run.overcrowding_events,
-                'Critical Rationing Events': run.critical_rationing_events,
-                'Normal Rationing Events': run.normal_rationing_events
-            }
-            # Add configuration parameters
-            for key, value in run.config.items():
-                run_dict[f'Config_{key}'] = value
-            runs_data.append(run_dict)
-            
-        return pd.DataFrame(runs_data)
-
-    def get_summary_statistics(self) -> pd.DataFrame:
-        """Generate summary statistics for all simulation runs"""
-        df = self.analyze_results()
-        
-        summary_stats = pd.DataFrame({
-            'Metric': [
-                'Success Rate',
-                'Average Years Survived',
-                'Average Final Population',
-                'Average Final Resources',
-                'Average Final Health',
-                'Average Distance Covered',
-                'Average Disease Outbreaks',
-                'Average Overcrowding Events',
-                'Average Critical Rationing Events',
-                'Average Normal Rationing Events'
-            ],
-            'Value': [
-                f"{(df['Final Status'] == 'Success').mean() * 100:.1f}%",
-                f"{df['Years Survived'].mean():.1f}",
-                f"{df['Final Population'].mean():.1f}",
-                f"{df['Final Resources'].mean():.1f}",
-                f"{df['Final Health'].mean():.1f}",
-                f"{df['Distance Covered (km)'].mean():.1f}",
-                f"{df['Disease Outbreaks'].mean():.1f}",
-                f"{df['Overcrowding Events'].mean():.1f}",
-                f"{df['Critical Rationing Events'].mean():.1f}",
-                f"{df['Normal Rationing Events'].mean():.1f}"
-            ]
-        })
-        
-        return summary_stats
+def run_optimization():
+    # Parameter ranges (as before)
+    capacities = np.linspace(1000, 1500, 6)
+    resources = np.linspace(80000, 120000, 6)
+    resource_gen_rates = np.linspace(95, 105, 6)
     
+    optimizer = ShipWeightOptimizer()
+    results = []
+    
+    # Sequential evaluation instead of parallel
+    for capacity, resources, resource_gen_rate in itertools.product(
+        capacities, resources, resource_gen_rates
+    ):
+        try:
+            result = optimizer.evaluate_configuration(
+                capacity, resources, resource_gen_rate
+            )
+            result['params'] = (capacity, resources, resource_gen_rate)
+            results.append(result)
+        except Exception as e:
+            print(f"Error with params ({capacity}, {resources}, {resource_gen_rate}): {str(e)}")
+            continue
+    
+    return pd.DataFrame(results)
+# Run the optimization
+results_df = run_optimization()
 
-class EnhancedShipWeightOptimizer:
-    def __init__(self, client):
-        self.client = client
-        self.results_cache = []
-        
-    def evaluate_configuration(self, capacity: int, resources: float, 
-                             resource_gen_rate: float, num_runs: int = 50) -> Dict:
-        """
-        Evaluate a specific configuration with statistical analysis
-        """
-        config = {
-            "initial_population": 1000,  # Fixed
-            "ship_capacity": capacity,
-            "initial_resources": resources,
-            "birth_rate": 9.4,           # Fixed
-            "death_rate": 3.7,           # Fixed
-            "resource_gen_rate": resource_gen_rate,
-            "lightspeed_fraction": 0.0059,  # Fixed
-            "health_index": 100          # Fixed
-        }
-        
-        # Run parallel simulations
-        self.client.run_parallel_simulations(config, num_runs=num_runs)
-        results_df = self.client.analyze_results()
-        
-        # Calculate ship weight
-        ship_weight = capacity * 100 + resources  # Assumed weight formula
-        
-        # Statistical analysis
-        final_pop_stats = {
-            'mean': results_df['Final Population'].mean(),
-            'std': results_df['Final Population'].std(),
-            'ci_lower': stats.t.interval(0.95, len(results_df)-1, 
-                                       loc=results_df['Final Population'].mean(),
-                                       scale=stats.sem(results_df['Final Population']))[0],
-            'ci_upper': stats.t.interval(0.95, len(results_df)-1,
-                                       loc=results_df['Final Population'].mean(),
-                                       scale=stats.sem(results_df['Final Population']))[1]
-        }
-        
-        # Calculate efficiency metrics
-        efficiency_metrics = {
-            'pop_per_weight': final_pop_stats['mean'] / ship_weight,
-            'pop_per_weight_ci_lower': final_pop_stats['ci_lower'] / ship_weight,
-            'pop_per_weight_ci_upper': final_pop_stats['ci_upper'] / ship_weight
-        }
-        
-        result = {
-            'config': config,
-            'ship_weight': ship_weight,
-            'final_population': final_pop_stats,
-            'efficiency': efficiency_metrics,
-            'success_rate': (results_df['Final Status'] == 'Success').mean()
-        }
-        
-        self.results_cache.append(result)
-        return result
-        
-    def grid_search(self,
-                   capacities: List[int],
-                   resources: List[float],
-                   resource_gen_rates: List[float],
-                   num_runs: int = 50) -> pd.DataFrame:
-        """
-        Perform grid search over parameter space
-        """
-        results = []
-        total_combinations = len(capacities) * len(resources) * len(resource_gen_rates)
-        current = 0
-        
-        for capacity, resource, rate in product(capacities, resources, resource_gen_rates):
-            current += 1
-            print(f"Evaluating combination {current}/{total_combinations}")
-            
-            result = self.evaluate_configuration(capacity, resource, rate, num_runs)
-            results.append({
-                'capacity': capacity,
-                'initial_resources': resource,
-                'resource_gen_rate': rate,
-                'ship_weight': result['ship_weight'],
-                'final_pop_mean': result['final_population']['mean'],
-                'final_pop_std': result['final_population']['std'],
-                'final_pop_ci_lower': result['final_population']['ci_lower'],
-                'final_pop_ci_upper': result['final_population']['ci_upper'],
-                'pop_per_weight': result['efficiency']['pop_per_weight'],
-                'success_rate': result['success_rate']
-            })
-            
-        return pd.DataFrame(results)
+# Sort by population efficiency (final population / ship weight)
+top_configs = results_df.nlargest(5, 'population_efficiency')
+print("\nTop 5 Most Efficient Configurations:")
+print(top_configs[['config', 'final_population_mean', 'ship_weight', 'population_efficiency']])
 
-    def analyze_pareto_frontier(self, results_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Identify Pareto-optimal configurations (maximizing final population, minimizing weight)
-        """
-        pareto_optimal = []
-        for idx, row in results_df.iterrows():
-            dominated = False
-            for idx2, row2 in results_df.iterrows():
-                if (idx != idx2 and 
-                    row2['final_pop_mean'] >= row['final_pop_mean'] and
-                    row2['ship_weight'] <= row['ship_weight'] and
-                    (row2['final_pop_mean'] > row['final_pop_mean'] or 
-                     row2['ship_weight'] < row['ship_weight'])):
-                    dominated = True
-                    break
-            if not dominated:
-                pareto_optimal.append(row)
-        
-        return pd.DataFrame(pareto_optimal)
+# Analyze parameter relationships
+correlation_matrix = results_df[[
+    'ship_weight', 'final_population_mean', 'years_survived_mean',
+    'params'
+]].apply(lambda x: pd.Series({
+    'capacity': x['params'][0],
+    'resources': x['params'][1],
+    'resource_gen_rate': x['params'][2]
+}))
 
-# 1. Initialize the optimizer with parallel processing
-client = ParallelGenerationShipClient(max_workers=4)
-optimizer = EnhancedShipWeightOptimizer(client)
-
-# 2. Define parameter ranges for grid search
-capacities = [1050, 1100, 1150, 1200, 1250]  # Ship capacities
-resources = [100000, 110000, 120000, 130000]  # Initial resources
-resource_gen_rates = [95.0, 97.5, 100.0, 102.5, 105.0]  # Resource generation rates
-
-# 3. Run grid search
-results_df = optimizer.grid_search(
-    capacities=capacities,
-    resources=resources,
-    resource_gen_rates=resource_gen_rates,
-    num_runs=50  # 50 runs per configuration for statistical significance
-)
-
-# 4. Find Pareto-optimal configurations
-pareto_df = optimizer.analyze_pareto_frontier(results_df)
-
-# 5. Save results
-results_df.to_csv('optimization_results.csv')
-pareto_df.to_csv('pareto_optimal_configs.csv')
+print("\nParameter Correlations:")
+print(correlation_matrix.corr())

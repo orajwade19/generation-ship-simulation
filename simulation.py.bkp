@@ -4,91 +4,38 @@ from flask_cors import CORS
 from scipy.stats import skewnorm
 import csv
 from io import StringIO
-from uuid import uuid4
-from datetime import datetime, timedelta
-import threading
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
-# Constants remain the same
-DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000
+# Constants
+DISTANCE_TO_PROXIMA_CENTAURI = 40140000000000  # In kilometers (4.24 light-years)
 SPEED_OF_LIGHT_KM_PER_HR = 1079251200
-NORMAL_CONSUMPTION = 100
-CRITICAL_CONSUMPTION_THRESHOLD = 90
+NORMAL_CONSUMPTION = 100  # Average resource consumption per person
+CRITICAL_CONSUMPTION_THRESHOLD = 90  # 90% of normal consumption
 
-# Simulation manager to handle multiple instances
-class SimulationManager:
-    def __init__(self):
-        self.simulations = {}
-        self.lock = threading.Lock()
-        self._cleanup_thread = threading.Thread(target=self._cleanup_expired_simulations, daemon=True)
-        self._cleanup_thread.start()
-    
-    def create_simulation(self, config):
-        """Create a new simulation instance and return its ID"""
-        simulation_id = str(uuid4())
-        with self.lock:
-            self.simulations[simulation_id] = {
-                'instance': GenerationShip(config),
-                'last_accessed': datetime.now()
-            }
-        return simulation_id
-    
-    def get_simulation(self, simulation_id):
-        """Get a simulation instance by ID and update its last accessed time"""
-        with self.lock:
-            if simulation_id in self.simulations:
-                self.simulations[simulation_id]['last_accessed'] = datetime.now()
-                return self.simulations[simulation_id]['instance']
-        return None
-    
-    def remove_simulation(self, simulation_id):
-        """Remove a simulation instance"""
-        with self.lock:
-            if simulation_id in self.simulations:
-                del self.simulations[simulation_id]
-    
-    def _cleanup_expired_simulations(self):
-        """Periodically remove simulations that haven't been accessed in 30 minutes"""
-        while True:
-            current_time = datetime.now()
-            with self.lock:
-                expired = [
-                    sim_id for sim_id, sim_data in self.simulations.items()
-                    if (current_time - sim_data['last_accessed']) > timedelta(minutes=30)
-                ]
-                for sim_id in expired:
-                    del self.simulations[sim_id]
-            # Sleep for 5 minutes before next cleanup
-            threading.Event().wait(300)
-
-# Global simulation manager
-simulation_manager = SimulationManager()
-
-# GenerationShip class remains mostly the same, just remove global state
+# Simulation class
 class GenerationShip:
     def __init__(self, data):
-        # Existing initialization code remains the same
         self.validate_data(data)
         self.year = 0
         self.population = data['initial_population']
         self.resources = data['initial_resources']
-        self.ship_capacity = data['ship_capacity']
+        self.ship_capacity = data ['ship_capacity']
         self.initial_birth_rate = data['birth_rate']
         self.initial_death_rate = data['death_rate']
         self.initial_resource_gen_rate = data['resource_gen_rate']
         self.speed = data['lightspeed_fraction'] * SPEED_OF_LIGHT_KM_PER_HR
         self.total_distance = DISTANCE_TO_PROXIMA_CENTAURI
-        self.total_years = (self.total_distance / (self.speed * 24 * 365))
+        self.total_years = (self.total_distance / (self.speed * 24 * 365))  # Travel years
         self.distance_covered = 0
-        self.initial_health_index = data['health_index']
+        self.initial_health_index = data['health_index']  # Initialize health index
         self.status = "Running"
         self.diseaseOutbreakEvent = 0
         self.overCrowdingEvent = 0
         self.criticalRationingEvent = 0
         self.normalRationingEvent = 0
-        self.simulation_history = []
+        self.simulation_history = []  # Add this to store simulation results
 
     @staticmethod
     def validate_data(data):
@@ -333,24 +280,46 @@ class GenerationShip:
             ])
 
         return output.getvalue()
-# Updated Flask routes to use SimulationManager
+
+
+
+# Flask API
+ship = None
+
+@app.route('/export-csv', methods=['GET'])
+def export_csv():
+    global ship
+    if not ship:
+        return jsonify({"error": "Simulation not initialized."}), 400
+    
+    if not ship.simulation_history:
+        return jsonify({"error": "No simulation data available."}), 400
+    
+    # Generate CSV data
+    csv_data = ship.get_csv()
+    
+    # Create the response
+    response = make_response(csv_data)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=generation_ship_simulation.csv'
+    
+    return response
+
 @app.route('/initialize', methods=['POST'])
 def initialize():
+    global ship
+    data = request.json
     try:
-        data = request.json
-        simulation_id = simulation_manager.create_simulation(data)
-        return jsonify({
-            "message": "Simulation initialized!",
-            "simulation_id": simulation_id
-        })
+        ship = GenerationShip(data)
+        return jsonify({"message": "Simulation initialized!"})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/simulate/<simulation_id>', methods=['POST'])
-def simulate(simulation_id):
-    ship = simulation_manager.get_simulation(simulation_id)
+@app.route('/simulate', methods=['POST'])
+def simulate():
+    global ship
     if not ship:
-        return jsonify({"error": "Invalid or expired simulation ID"}), 404
+        return jsonify({"error": "Simulation not initialized."}), 400
 
     years = request.json.get('years', 1)
     results = []
@@ -365,30 +334,17 @@ def simulate(simulation_id):
 
     return jsonify(results)
 
-@app.route('/reset/<simulation_id>', methods=['POST'])
-def reset(simulation_id):
-    ship = simulation_manager.get_simulation(simulation_id)
-    if not ship:
-        return jsonify({"error": "Invalid or expired simulation ID"}), 404
-    
-    ship.reset()
-    return jsonify({"message": "Simulation reset successfully."})
+@app.route('/reset', methods=['POST'])
+def reset():
+    global ship
+    if ship:
+        ship.reset()
+        return jsonify({"message": "Simulation reset successfully."})
+    return jsonify({"error": "No simulation to reset."}), 400
 
-@app.route('/export-csv/<simulation_id>', methods=['GET'])
-def export_csv(simulation_id):
-    ship = simulation_manager.get_simulation(simulation_id)
-    if not ship:
-        return jsonify({"error": "Invalid or expired simulation ID"}), 404
-    
-    if not ship.simulation_history:
-        return jsonify({"error": "No simulation data available."}), 400
-    
-    csv_data = ship.get_csv()
-    response = make_response(csv_data)
-    response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = 'attachment; filename=generation_ship_simulation.csv'
-    
-    return response
+@app.route('/test', methods=['GET'])
+def test_cors():
+    return jsonify({"message": "CORS is working!"})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
