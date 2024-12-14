@@ -204,6 +204,7 @@ class EnhancedGenerationShipClient:
         if missing_params:
             raise ValueError(f"Missing required parameters: {', '.join(missing_params)}")
 
+        print(config)  # Before the requests.post call
         response = requests.post(f"{self.base_url}/initialize", json=config)
         response.raise_for_status()
         result = response.json()
@@ -783,26 +784,248 @@ class EnhancedShipWeightOptimizer:
         
         return pd.DataFrame(pareto_optimal)
 
-# 1. Initialize the optimizer with parallel processing
-client = ParallelGenerationShipClient(max_workers=4)
-optimizer = EnhancedShipWeightOptimizer(client)
+import pandas as pd
+import numpy as np
+from scipy import stats
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
 
-# 2. Define parameter ranges for grid search
-capacities = [1050, 1100, 1150, 1200, 1250]  # Ship capacities
-resources = [100000, 110000, 120000, 130000]  # Initial resources
-resource_gen_rates = [95.0, 97.5, 100.0, 102.5, 105.0]  # Resource generation rates
+@dataclass
+class CRNComparisonResult:
+    """Store results of CRN comparison analysis"""
+    config_a: Dict
+    config_b: Dict
+    crn_differences: pd.DataFrame  # Paired differences with CRN
+    non_crn_differences: pd.DataFrame  # Unpaired differences without CRN
+    variance_reduction: Dict  # Variance reduction ratios for different metrics
+    statistical_tests: Dict  # Results of statistical tests
 
-# 3. Run grid search
-results_df = optimizer.grid_search(
-    capacities=capacities,
-    resources=resources,
-    resource_gen_rates=resource_gen_rates,
-    num_runs=50  # 50 runs per configuration for statistical significance
-)
+class CRNComparisonClient(ParallelGenerationShipClient):
+    def __init__(self, base_url: str = 'http://localhost:5001', max_workers: int = 4):
+        super().__init__(base_url, max_workers)
+        
+    def run_crn_comparison(self, config_a: Dict, config_b: Dict, 
+                          num_runs: int = 50, crn_base_seed: int = 42) -> CRNComparisonResult:
+        """
+        Run comparative analysis with and without CRN
+        
+        Args:
+            config_a: First configuration to test
+            config_b: Second configuration to test
+            num_runs: Number of simulation runs
+            crn_base_seed: Base seed for CRN runs
+        """
+        # Run simulations with CRN (paired)
+        crn_results_a = []
+        crn_results_b = []
+        
+        print("\nRunning CRN paired simulations...")
+        for i in range(num_runs):
+            # Use different seeds for each pair but same seed within pair
+            current_seed = crn_base_seed + i
+            
+            # Run config A with CRN
+            response = self.session.post(f"{self.base_url}/initialize", 
+                                       json={"config": config_a, "crn_seed": current_seed})
+            simulation_id = response.json()['simulation_id']
+            results = self.session.post(f"{self.base_url}/simulate/{simulation_id}", 
+                                      json={'years': 1000}).json()
+            crn_results_a.append(self._extract_metrics(results[-1]))
+            
+            # Run config B with same CRN seed
+            response = self.session.post(f"{self.base_url}/initialize", 
+                                       json={"config": config_b, "crn_seed": current_seed})
+            simulation_id = response.json()['simulation_id']
+            results = self.session.post(f"{self.base_url}/simulate/{simulation_id}", 
+                                      json={'years': 1000}).json()
+            crn_results_b.append(self._extract_metrics(results[-1]))
+            
+            print(f"Completed CRN pair {i+1}/{num_runs}")
+        
+        # Run simulations without CRN (unpaired)
+        print("\nRunning non-CRN simulations...")
+        non_crn_results_a = self._run_non_crn_simulations(config_a, num_runs)
+        non_crn_results_b = self._run_non_crn_simulations(config_b, num_runs)
+        
+        # Convert results to DataFrames
+        crn_df_a = pd.DataFrame(crn_results_a)
+        crn_df_b = pd.DataFrame(crn_results_b)
+        non_crn_df_a = pd.DataFrame(non_crn_results_a)
+        non_crn_df_b = pd.DataFrame(non_crn_results_b)
+        
+        # Calculate differences
+        crn_differences = self._calculate_differences(crn_df_a, crn_df_b, paired=True)
+        non_crn_differences = self._calculate_differences(non_crn_df_a, non_crn_df_b, paired=False)
+        
+        # Calculate variance reduction
+        variance_reduction = self._calculate_variance_reduction(
+            crn_differences, non_crn_differences)
+        
+        # Perform statistical tests
+        statistical_tests = self._perform_statistical_tests(
+            crn_df_a, crn_df_b, non_crn_df_a, non_crn_df_b)
+        
+        return CRNComparisonResult(
+            config_a=config_a,
+            config_b=config_b,
+            crn_differences=crn_differences,
+            non_crn_differences=non_crn_differences,
+            variance_reduction=variance_reduction,
+            statistical_tests=statistical_tests
+        )
+    
+    def _extract_metrics(self, results: Dict) -> Dict:
+        """Extract key metrics from simulation results"""
+        return {
+            'population': results['population'],
+            'resources': results['resources'],
+            'health_index': results['health_index'],
+            'distance_covered': results['distance_covered'],
+            'years_survived': results['year'],
+            'success': 1 if results['status'] == 'Success' else 0
+        }
+    
+    def _run_non_crn_simulations(self, config: Dict, num_runs: int) -> List[Dict]:
+        """Run simulations without CRN"""
+        results = []
+        for i in range(num_runs):
+            response = self.session.post(f"{self.base_url}/initialize", 
+                                       json={"config": config})
+            simulation_id = response.json()['simulation_id']
+            sim_results = self.session.post(f"{self.base_url}/simulate/{simulation_id}", 
+                                          json={'years': 1000}).json()
+            results.append(self._extract_metrics(sim_results[-1]))
+            print(f"Completed non-CRN run {i+1}/{num_runs} for configuration")
+        return results
+    
+    def _calculate_differences(self, df_a: pd.DataFrame, df_b: pd.DataFrame, 
+                             paired: bool = True) -> pd.DataFrame:
+        """Calculate differences between configurations"""
+        if paired:
+            differences = df_a - df_b
+        else:
+            # Calculate summary statistics for unpaired comparison
+            differences = pd.DataFrame({
+                'mean_diff': df_a.mean() - df_b.mean(),
+                'std_diff': np.sqrt(df_a.var() + df_b.var())
+            }).T
+            
+        return differences
+    
+    def _calculate_variance_reduction(self, crn_diff: pd.DataFrame, 
+                                    non_crn_diff: pd.DataFrame) -> Dict:
+        """Calculate variance reduction ratios for each metric"""
+        variance_reduction = {}
+        
+        for column in crn_diff.columns:
+            if column in ['success']:  # Skip binary metrics
+                continue
+            
+            crn_variance = np.var(crn_diff[column])
+            non_crn_variance = non_crn_diff.loc['std_diff', column] ** 2
+            
+            variance_reduction[column] = 1 - (crn_variance / non_crn_variance)
+            
+        return variance_reduction
+    
+    def _perform_statistical_tests(self, crn_df_a: pd.DataFrame, crn_df_b: pd.DataFrame,
+                                 non_crn_df_a: pd.DataFrame, non_crn_df_b: pd.DataFrame) -> Dict:
+        """Perform statistical tests for both CRN and non-CRN results"""
+        test_results = {}
+        
+        # Test metrics
+        metrics = [col for col in crn_df_a.columns if col != 'success']
+        
+        for metric in metrics:
+            # CRN (paired t-test)
+            crn_ttest = stats.ttest_rel(crn_df_a[metric], crn_df_b[metric])
+            
+            # Non-CRN (unpaired t-test)
+            non_crn_ttest = stats.ttest_ind(non_crn_df_a[metric], non_crn_df_b[metric])
+            
+            test_results[metric] = {
+                'crn': {
+                    'statistic': crn_ttest.statistic,
+                    'p_value': crn_ttest.pvalue
+                },
+                'non_crn': {
+                    'statistic': non_crn_ttest.statistic,
+                    'p_value': non_crn_ttest.pvalue
+                }
+            }
+        
+        # Success rate comparison (chi-square test)
+        success_a = non_crn_df_a['success'].sum()
+        success_b = non_crn_df_b['success'].sum()
+        n = len(non_crn_df_a)
+        
+        contingency = [[success_a, n - success_a],
+                      [success_b, n - success_b]]
+        
+        chi2, p_value = stats.chi2_contingency(contingency)[:2]
+        
+        test_results['success_rate'] = {
+            'chi2': chi2,
+            'p_value': p_value
+        }
+        
+        return test_results
+    
+    def print_comparison_report(self, result: CRNComparisonResult) -> None:
+        """Print detailed comparison report"""
+        print("\nConfiguration Comparison Report")
+        print("=" * 50)
+        
+        print("\nVariance Reduction with CRN:")
+        for metric, reduction in result.variance_reduction.items():
+            print(f"{metric}: {reduction*100:.1f}% reduction in variance")
+        
+        print("\nStatistical Tests:")
+        for metric, tests in result.statistical_tests.items():
+            if metric != 'success_rate':
+                print(f"\n{metric}:")
+                print("CRN (Paired t-test):")
+                print(f"  t-statistic: {tests['crn']['statistic']:.3f}")
+                print(f"  p-value: {tests['crn']['p_value']:.4f}")
+                
+                print("Non-CRN (Unpaired t-test):")
+                print(f"  t-statistic: {tests['non_crn']['statistic']:.3f}")
+                print(f"  p-value: {tests['non_crn']['p_value']:.4f}")
+            else:
+                print("\nSuccess Rate (Chi-square test):")
+                print(f"  chi2: {tests['chi2']:.3f}")
+                print(f"  p-value: {tests['p_value']:.4f}")
 
-# 4. Find Pareto-optimal configurations
-pareto_df = optimizer.analyze_pareto_frontier(results_df)
-
-# 5. Save results
-results_df.to_csv('optimization_results.csv')
-pareto_df.to_csv('pareto_optimal_configs.csv')
+# Example usage:
+if __name__ == "__main__":
+    # Initialize client
+    client = CRNComparisonClient()
+    
+    # Define two configurations to compare
+    config_a = {
+        "initial_population": 1000,
+        "ship_capacity": 1100,
+        "initial_resources": 110000,
+        "birth_rate": 9.4,
+        "death_rate": 3.7,
+        "resource_gen_rate": 99.7,
+        "lightspeed_fraction": 0.0059,
+        "health_index": 100
+    }
+    
+    config_b = {
+        "initial_population": 1000,
+        "ship_capacity": 1100,
+        "initial_resources": 110000,
+        "birth_rate": 9.4,
+        "death_rate": 3.7,
+        "resource_gen_rate": 102.5,
+        "lightspeed_fraction": 0.0059,
+        "health_index": 100
+    }
+    
+    # Run comparison
+    comparison_result = client.run_crn_comparison(config_a, config_b, num_runs=50)
+    
+    # Print report
+    client.print_comparison_report(comparison_result)
