@@ -1,0 +1,14 @@
+variation_id,success_rate
+base,88.0
+initial_resources_101000,88.0
+initial_resources_102000,88.0
+initial_resources_98000,88.0
+initial_resources_99000,88.0
+resource_gen_rate_101.0,25.0
+resource_gen_rate_101.5,56.00000000000001
+resource_gen_rate_102.5,99.0
+resource_gen_rate_103.0,100.0
+ship_capacity_1040,88.0
+ship_capacity_1045,88.0
+ship_capacity_1055,88.0
+ship_capacity_1060,88.0
